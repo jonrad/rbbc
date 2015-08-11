@@ -4,27 +4,45 @@ library("ggplot2")
 library("scales")
 library("knitr")
 
-players.raw <- fromJSON(paste(readLines("data/players.json"), collapse=""))
+load.rushing <- function() {
+  players.raw <- fromJSON(paste(readLines("data/players.json"), collapse=""))
+  
+  players <- ldply(players.raw, function(player) c(id = player$gsis_id, name = player$full_name, position = ifelse(is.null(player$position), "UNKNOWN", player$position)))
+  
+  games.filenames <- sprintf("data/%s", dir("data/", "*.json"))
+  games.filenames <- games.filenames[games.filenames != "data/players.json"]
+  
+  games.raw <- lapply(games.filenames, function(x) fromJSON(paste(readLines(x), collapse="")))
+  
+  players.stats.rushing <- ldply(games.raw, function(game)
+    ldply(c("home", "away"), function(side) 
+      ldply(
+        names(game[[1]][[side]]$stats$rushing), 
+        function(id) 
+          c(
+            game.id = names(game)[1],
+            player.id = id,
+            team = game[[1]][[side]]$abbr, 
+            attempts = game[[1]][[side]]$stats$rushing[[id]]$att))))
+  
+  players.stats.rushing$attempts <- as.numeric(players.stats.rushing$attempts)
+  
+  players.stats.rushing
+}
 
-players <- ldply(players.raw, function(player) c(id = player$gsis_id, name = player$full_name, position = ifelse(is.null(player$position), "UNKNOWN", player$position)))
+load.receiving <- function() {
+  plays <- read.csv("data/plays.csv")
+  
+  passing <- subset(plays, stat.id == 115)
+  
+  ddply(passing, c("game.id", "player.id"), summarize, attempts = length(game.id))
+}
 
-games.filenames <- sprintf("data/%s", dir("data/", "*.json"))
-games.filenames <- games.filenames[games.filenames != "data/players.json"]
+players.stats.rushing <- load.rushing()
+players.stats.receiving <- load.receiving()
 
-games.raw <- lapply(games.filenames, function(x) fromJSON(paste(readLines(x), collapse="")))
-
-players.stats.rushing <- ldply(games.raw, function(game)
-  ldply(c("home", "away"), function(side) 
-    ldply(
-      names(game[[1]][[side]]$stats$rushing), 
-      function(id) 
-        c(
-          player.id = id,
-          game.id = names(game)[1],
-          team = game[[1]][[side]]$abbr, 
-          attempts = game[[1]][[side]]$stats$rushing[[id]]$att))))
-
-players.stats.rushing$attempts <- as.numeric(players.stats.rushing$attempts)
+colnames(players.stats.rushing) <- c("game.id", "player.id", "team", "rushing.attempts")
+colnames(players.stats.receiving) <- c("game.id", "player.id", "receiving.attempts")
 
 players.summary <- ddply(
   players.stats.rushing, 
