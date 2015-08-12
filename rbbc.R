@@ -70,8 +70,15 @@ players.aggregated$rank = with(players.aggregated, ave(attempts, team, FUN = fun
 players.summary <- merge(players.summary, players.aggregated[,c("team", "player.id", "rank")], by = c("team", "player.id"))
 players.summary <- players.summary[order(players.summary$rank, ifelse(players.summary$type == "rushing", 1, 2)),]
 
-teams.summary <- ddply(players.summary.sum, c("team"), summarise, total.attempts = sum(attempts), max.attempts = max(attempts) / sum(attempts))
-teams.summary$order <- rank(teams.summary$max.attempts, ties.method = "first")
+teams.summary <- ddply(
+  players.summary.sum, 
+  c("team"), 
+  summarise, 
+  total.attempts = sum(attempts), 
+  max.attempts.percent = max(attempts) / sum(attempts),
+  max.attempts = max(attempts))
+
+teams.summary$order <- rank(teams.summary$max.attempts.percent, ties.method = "first")
 rownames(teams.summary) <- teams.summary$team
 
 png("2014.png", width = 1024, height= 1024)
@@ -93,7 +100,16 @@ ggplot(
   ggtitle("RB Rush Attempt % By Team (2014)") +
   coord_flip() +
   theme(legend.position = "none", axis.ticks = element_blank(), text = element_text(size = 24)) +
-  geom_text(aes(label = ifelse(rank == 1, players.summary$name, "")), y = .01, hjust = 0)
+  geom_text(
+    hjust = 0,
+    aes(
+      label = ifelse(rank <= 2, players.summary$name, ""),
+      y = ifelse(rank == 1, 0, teams.summary[team, "max.attempts.percent"]) + .01)) +
+  geom_text(
+    hjust = 0,
+    aes(
+      label = sprintf("%s of %s", teams.summary[team, "max.attempts"], teams.summary[team, "total.attempts"]),
+      y = .25))
 
 dev.off()
 
