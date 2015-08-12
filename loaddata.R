@@ -7,20 +7,23 @@ games.filenames <- games.filenames[games.filenames != "data/players.json"]
 
 games.raw <- lapply(games.filenames, function(x) fromJSON(paste(readLines(x), collapse="")))
 
-plays <- ldply(games.raw, .id = NULL, function(game)
+plays <- ldply(games.raw, function(game)
 {
   game.id = names(game)[1]
   
-  ldply(game[[1]]$drives, .id = NULL, function(drive)
+  plays <- ldply(game[[1]]$drives, function(drive)
   {
     if (is.list(drive))
     {
-      ldply(drive$plays, .id = NULL, function(play)
+      team <- drive$start$team
+      
+      ldply(drive$plays, function(play)
         ldply(names(play$players), function(player.id)
           ldply(play$players[[player.id]], function(stat) 
             c(
               game.id = game.id,
-              player.id = player.id, 
+              player.id = player.id,
+              team = team,
               stat.id = stat$statId))))
     }
     else
@@ -28,6 +31,8 @@ plays <- ldply(games.raw, .id = NULL, function(game)
       NULL
     }
   })
+  
+  plays[,c("game.id", "player.id", "team", "stat.id")]
 })
 
 write.csv(plays, "data/plays.csv", row.names = FALSE)
